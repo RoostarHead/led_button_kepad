@@ -1,0 +1,140 @@
+#include <TM1637.h>
+#include <FastLED.h>
+#include <Keypad.h>
+
+#define NUM_LEDS 1
+#define DATA_PIN 4
+#define BUT_PIN 2
+#define DELAY_MS 1000
+
+int DIGIT_CLK = 19;
+int DIGIT_DIO = 18;
+int led_counter = 0;
+String LIVE_SCREEN = "";
+
+TM1637 tm(DIGIT_CLK, DIGIT_DIO);
+
+CRGB leds[NUM_LEDS];
+
+const byte ROWS = 4; //four rows
+const byte COLS = 4; //four columns
+//define the cymbols on the buttons of the keypads
+char hexaKeys[ROWS][COLS] = {
+  {'1','2','3','A'},// A = 10
+  {'4','5','6','B'},// b = 11
+  {'7','8','9','C'},// C = 12
+  {'*','0','#','D'} // d = 13
+  // * = 20  # = 21
+};
+byte rowPins[ROWS] = {32, 33, 25, 26}; //connect to the row pinouts of the keypad
+byte colPins[COLS] = {27, 14, 12, 13}; //connect to the column pinouts of the keypad
+
+//initialize an instance of class NewKeypad
+Keypad customKeypad = Keypad( makeKeymap(hexaKeys), rowPins, colPins, ROWS, COLS); 
+
+
+void setup() {
+  Serial.begin(115200);
+  FastLED.addLeds<WS2812, DATA_PIN, GRB>(leds, NUM_LEDS);
+  pinMode(BUT_PIN, INPUT_PULLUP);
+  leds[0] = CRGB::Green;
+
+  //Clear screen and set screen to a brightness level of 7 out of 0-7
+  tm.init();
+  tm.set(7);
+}
+
+/*
+This method converts all the possible characters to an integer. This will help the dipslay method.
+*/
+int convert(char chr) {
+  switch (chr) {
+    case 'A': case 'a': return 10;
+    case 'B': case 'b': return 11;
+    case 'C': case 'c': return 12;
+    case 'D': case 'd': return 13;
+    case '*': return 20;
+    case '#': return 21;
+    default: return chr - '0';
+  }
+}
+
+/*
+This method will allow you to write a string of up to 4 characters and have it display on the screen.
+Use this method like this: display("12AB")
+*/
+void display(String str)
+{
+  int len = str.length();
+  for (int i = 0; i < len; i++)
+  {
+     tm.display(i, convert(str.charAt(i)));
+  }
+}
+
+
+/*
+This method allows you to type any character on the keypad and it will display 
+that character on the screen. You can type up to 4 characaters. If you press '*', 
+then a character will be deleted. If you press '#', then all characters will be deleted.
+*/
+void active_keypad()
+{
+  char customKey = customKeypad.getKey();
+  
+  if (customKey) 
+  {
+    if (customKey == '*')
+    {
+      int len = LIVE_SCREEN.length();
+      LIVE_SCREEN = LIVE_SCREEN.substring(0, len - 1);
+      tm.init();
+      display(LIVE_SCREEN);
+    }
+    else if (customKey == '#')
+    {
+      LIVE_SCREEN = "";
+      tm.init();
+    }
+    else 
+    {
+      if (LIVE_SCREEN.length() < 4)
+      {
+        LIVE_SCREEN = LIVE_SCREEN + customKey;
+        display(LIVE_SCREEN);
+        Serial.println(LIVE_SCREEN);
+      }
+    }
+  }
+}
+
+/*
+This method lets you press a button and a light will switch colors. It will then at a 
+delay of DELAY_MS in order to prevent someone from accidentally pressing the button twice.
+*/
+void button_light()
+{
+  if (digitalRead(BUT_PIN)) {
+    if (led_counter == 0) {
+      leds[0] = CRGB::Red;
+      Serial.println("Red");
+    } else {
+      leds[0] = CRGB::Green;
+      Serial.println("Green");
+    }
+    FastLED.show();
+    led_counter = 1 - led_counter;
+    while (digitalRead(BUT_PIN)) {}
+    delay(DELAY_MS);
+  }
+}
+
+void loop() 
+{
+  button_light();
+
+  //display("ABCD");
+  //tm.display(0, 1);
+  active_keypad();
+  
+}
